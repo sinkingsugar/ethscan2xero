@@ -1,0 +1,23 @@
+(def _args (eval `(assoc {} ~@*command-line-args*)))
+
+(def _parameters {:in (if (contains? _args "--in") (get _args "--in") "in.csv")
+                  :out (if (contains? _args "--out") (get _args "--out") "out.csv")})
+
+(def address-table (slurp "known-wallets.edn"))
+
+(defnode root)
+
+(defchain main
+  (get _parameters :in) (FS.Read) (CSV.Read)
+  (ForEach
+   (->
+    (| (Take 0) = .tx-hash)
+    (| (Take 2) = .date)
+    (| (Take 3) = .from)
+    (| (Take 4) = .to)
+    (| (Take 5) = .value)
+    (| (Take 8) = .token)
+    ;
+    ))
+  ;
+  )
