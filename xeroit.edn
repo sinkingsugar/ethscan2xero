@@ -3,21 +3,60 @@
 (def _parameters {:in (if (contains? _args "--in") (get _args "--in") "in.csv")
                   :out (if (contains? _args "--out") (get _args "--out") "out.csv")})
 
-(def address-table (slurp "known-wallets.edn"))
+(def us (read-string (slurp "us.edn")))
+(def address-table (read-string (slurp "known-wallets.edn")))
 
 (defnode root)
 
+(defn find-wallet [addr]
+  (->
+   .address-table (Take addr) = .addr-name
+   (If (IsNotNone)
+       (-> .addr-name (ExpectString))
+       (-> addr))))
+
 (defchain main
+  address-table = .address-table
+  (Sequence .output :Types [[Type.String]])
   (get _parameters :in) (FS.Read) (CSV.Read)
   (ForEach
    (->
     (| (Take 0) = .tx-hash)
-    (| (Take 2) = .date)
+    (| (Take 2) (Regex.Search #"(\w+)-(\w+)-(\w+)") = .raw-date
+       "" >= .date
+       .raw-date (Take 3) (AppendTo .date)
+       "/" (AppendTo .date)
+       .raw-date (Take 2) (AppendTo .date)
+       "/" (AppendTo .date)
+       .raw-date (Take 1) (AppendTo .date))
     (| (Take 3) = .from)
     (| (Take 4) = .to)
-    (| (Take 5) = .value)
+    (| (Take 5) >= .value)
     (| (Take 8) = .token)
-    ;
-    ))
-  ;
-  )
+
+    .token
+    (When
+     (Any ["USDC" "USDT"])
+     (->
+      .from
+      (If
+       (Any us)
+       (->
+        ; We send money
+        "-" (PrependTo .value)
+        (find-wallet .to) = .payee
+        [.date .value .payee "USD Stablecoin payment sent" .tx-hash ""] (Log "Sent")
+        ;
+        )
+       (->
+        ; We receive money
+        (find-wallet .from) = .payee
+        [.date .value .payee "USD Stablecoin payment received" .tx-hash ""] (Log "Received")
+        ;
+        ))>> .output))))
+  .output (CSV.Write) >= .csv-output
+  "*Date,*Amount,Payee,Description,Reference,Check Number\n" (PrependTo .csv-output)
+  (get _parameters :out) (FS.Write .csv-output))
+
+(schedule root main)
+(run root)
