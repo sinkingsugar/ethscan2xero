@@ -1,0 +1,23 @@
+(def _args (eval `(assoc {} ~@*command-line-args*)))
+
+(def _parameters {:in (if (contains? _args "--in") (get _args "--in") "in.csv")
+                  :out (if (contains? _args "--out") (get _args "--out") "out.csv")})
+
+(defnode root)
+
+(defchain main
+  (Sequence .output :Types [[Type.String]])
+  (get _parameters :in) (FS.Read) (CSV.Read :Separator ";")
+  (ForEach
+   (->
+    (| (Take 0) >> .row)
+    (| (Take 2) >> .row)
+    (| (Take 1) >> .row)
+    .row >> .output
+    (Log)))
+  .output (CSV.Write) >= .csv-output
+  "*Date,*Amount,Payee,Description,Reference,Check Number\n" (PrependTo .csv-output)
+  (get _parameters :out) (FS.Write .csv-output))
+
+(schedule root main)
+(run root)
