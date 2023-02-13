@@ -3,9 +3,9 @@
 (def _parameters {:in (if (contains? _args "--in") (get _args "--in") "in.csv")
                   :out (if (contains? _args "--out") (get _args "--out") "out.csv")})
 
-(defnode root)
+(defmesh root)
 
-(defchain main
+(defwire main
   (Sequence .output :Types [[Type.String]])
   (get _parameters :in) (FS.Read) (CSV.Read :Separator ";")
   (ForEach
